@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include "pci.c"  // 假设已实现 PCI 枚举功能
+#include "pci.h"  // 假设已实现 PCI 枚举功能
 #include "slab.c"   // 假设已实现物理内存分配
 #include "io.h"   // 内存映射 I/O 函数
 
