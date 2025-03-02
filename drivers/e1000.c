@@ -1,15 +1,11 @@
 #include <stdint.h>
-#include "pci.c"
+#include "pci.h"
 #include "slab.c"
 #include "io.h"
 
-/*-----------------------------------------
-  Intel 82540EM (e1000) 驱动实现
------------------------------------------*/
 #define E1000_VENDOR_ID   0x8086
 #define E1000_DEVICE_ID   0x100E  // 82540EM
 
-// 寄存器定义
 #define E1000_CTRL        0x0000  // 设备控制
 #define E1000_STATUS      0x0008  // 设备状态
 #define E1000_RX_BASE     0x2800  // 接收描述符基址
@@ -27,18 +23,15 @@
 #define E1000_TDH         0x3810  // 发送头指针
 #define E1000_TDT         0x3818  // 发送尾指针
 
-// 接收控制标志
 #define RCTL_EN           (1 << 1)    // 接收使能
 #define RCTL_SBP          (1 << 2)    // 接收所有流量
 #define RCTL_UPE          (1 << 3)    // 单播接收使能
 #define RCTL_LPE          (1 << 5)    // 长包接收
 #define RCTL_BAM          (1 << 15)   // 广播接收
 
-// 发送控制标志
 #define TCTL_EN           (1 << 1)    // 发送使能
 #define TCTL_PSP          (1 << 3)    // 填充短包
 
-// 描述符状态标志
 #define DESC_OWN          (1 << 0)    // 描述符由硬件拥有
 #define DESC_EOP          (1 << 1)    // 数据包结束
 
@@ -71,7 +64,6 @@ struct e1000_device {
 
 static struct e1000_device nic;
 
-// 初始化接收环
 static void e1000_init_rx() {
     // 分配对齐的接收描述符环（物理内存）
     nic.rx_ring = alloc_phys_pages(1); // 分配1页（256个描述符）
@@ -133,21 +125,16 @@ void e1000_send_packet(void* data, uint16_t len) {
     nic.tx_idx = (idx + 1) % 256;
 }
 
-/*-----------------------------------------
-  扩展支持其他网卡（示例：假设的e1001）
------------------------------------------*/
 struct nic_ops {
     void (*init)(struct pci_device*);
     void (*send)(void*, uint16_t);
 };
 
-// e1000 驱动实现
 static const struct nic_ops e1000_ops = {
     .init = e1000_init,
     .send = e1000_send_packet
 };
 
-// 假设的e1001驱动（示例框架）
 #ifdef SUPPORT_E1001
 #define E1001_DEVICE_ID   0x100F
 

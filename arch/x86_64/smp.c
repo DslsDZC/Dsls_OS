@@ -1,9 +1,11 @@
 #include <stdint.h>
-#include "apic.c"
+#include <stddef.h>
+#include "apic.h"
 #include "task.h"
-#include "slab.c"
+#include "slab.h"
 
 #define MAX_CPUS 16
+#define AP_BOOT_ADDR 0x8  // 0x8000物理地址对应的4KB页号（0x8000 >> 12）
 
 // 每个 CPU 核心的状态
 struct cpu_state {

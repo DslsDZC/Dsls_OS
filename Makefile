@@ -1,6 +1,6 @@
 CC = clang
 LD = ld.lld
-CFLAGS = -target x86_64-unknown-none -nostdlib -ffreestanding -mno-red-zone
+CFLAGS = -target x86_64-unknown-none -nostdlib -ffreestanding -mno-red-zone -I/path/to/cross-compiler/include
 
 SRCS = arch/x86_64/boot.asm \
        kernel/main.c \

@@ -1,7 +1,6 @@
 #include <stdint.h>
-#include "slab.c"   // 假设存在物理内存分配函数
+#include "slab.h"
 
-// VMX 相关 MSR 寄存器
 #define IA32_VMX_BASIC_MSR         0x480
 #define IA32_VMX_CR0_FIXED0_MSR    0x486
 #define IA32_VMX_CR0_FIXED1_MSR    0x487
@@ -9,15 +8,6 @@
 #define IA32_VMX_CR4_FIXED1_MSR    0x489
 #define IA32_VMX_VMCS_ENABLE_MSR   0x48A
 
-/* 
- * ==============================================
- * VMCS 字段定义 (Intel SDM Vol.3, Chapter 24)
- * ==============================================
- */
-
-/*--------------------------
-  控制类字段（Control Fields） 
- --------------------------*/
 #define VMCS_CTRL_PIN_BASED            0x4000  // 基于引脚的执行控制
 #define VMCS_CTRL_CPU_BASED            0x4002  // 基于处理器的执行控制
 #define VMCS_CTRL_EXCEPTION_BITMAP     0x4004  // 异常位图
@@ -29,9 +19,6 @@
 #define VMCS_CTRL_CR4_GUEST_HOST_MASK  0x6002  // CR4 Guest/Host 掩码
 #define VMCS_CTRL_CR3_TARGET_COUNT     0x600A  // CR3目标数量
 
-/*--------------------------
-  主机状态字段（Host-State Fields） 
- --------------------------*/
 #define VMCS_HOST_CR0                  0x0C00  // 主机CR0
 #define VMCS_HOST_CR3                  0x0C02  // 主机CR3
 #define VMCS_HOST_CR4                  0x0C04  // 主机CR4
@@ -47,9 +34,6 @@
 #define VMCS_HOST_RSP                  0x0C1C  // 主机RSP
 #define VMCS_HOST_RIP                  0x0C1E  // 主机RIP
 
-/*--------------------------
-  客户机状态字段（Guest-State Fields） 
- --------------------------*/
 #define VMCS_GUEST_CR0                 0x6800  // 客户机CR0
 #define VMCS_GUEST_CR3                 0x6802  // 客户机CR3
 #define VMCS_GUEST_CR4                 0x6804  // 客户机CR4
@@ -67,9 +51,6 @@
 #define VMCS_GUEST_RFLAGS              0x6820  // 客户机RFLAGS
 #define VMCS_GUEST_PENDING_DEBUG_EXC   0x6822  // 待处理调试异常
 
-/*--------------------------
-  VM-Exit 信息字段（VM-Exit Information Fields）
- --------------------------*/
 #define VMCS_EXIT_REASON               0x4400  // 退出原因
 #define VMCS_EXIT_INTERRUPTION_INFO    0x4402  // 中断信息
 #define VMCS_EXIT_INTERRUPTION_ERRCODE 0x4404  // 中断错误码
@@ -78,23 +59,16 @@
 #define VMCS_EXIT_INSTRUCTION_LEN      0x440C  // 指令长度
 #define VMCS_EXIT_QUALIFICATION        0x440E  // 退出限定符
 
-/*--------------------------
-  VM-Entry 控制字段（VM-Entry Control Fields）
- --------------------------*/
 #define VMCS_ENTRY_CONTROL             0x4012  // VM入口控制
 #define VMCS_ENTRY_INTERRUPTION_INFO   0x4014  // 入口中断信息
 #define VMCS_ENTRY_EXCEPTION_ERRCODE   0x4016  // 入口异常错误码
 #define VMCS_ENTRY_INSTRUCTION_LEN     0x4018  // 入口指令长度
 
-/*--------------------------
-  其他关键字段
- --------------------------*/
 #define VMCS_LINK_POINTER              0x0000  // VMCS链接指针
 #define VMCS_GUEST_ACTIVITY_STATE      0x6824  // 客户机活动状态
 #define VMCS_GUEST_INTERRUPTIBILITY    0x6826  // 客户机可中断状态
 #define VMCS_PREEMPTION_TIMER_VALUE    0x482E  // 抢占计时器值
 
-// VMX 指令错误码
 #define VMX_ERROR_SUCCESS          0
 #define VMX_ERROR_FAILED_VMXON     1
 #define VMX_ERROR_FAILED_VMPTRLD   2

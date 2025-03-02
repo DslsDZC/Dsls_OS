@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stddef.h>
 #include "io.h"
 #include "printf.h"
 
@@ -17,14 +18,14 @@ struct pci_device {
     uint8_t function;
     uint16_t vendor_id;
     uint16_t device_id;
+    uint8_t revision_id;
     uint8_t class_code;
     uint8_t subclass;
     uint8_t prog_if;
     uint8_t header_type;
-    uint32_t bars[6];  // Base Address Registers
+    uint32_t bars[6];
     struct pci_device* next;
 };
-
 static struct pci_device* pci_devices = NULL;
 
 // 生成 PCI 配置空间地址

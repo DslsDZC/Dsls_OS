@@ -1,9 +1,9 @@
 #include <stdint.h>
+#include <stddef.h>
 #include "pci.h"  // 假设已实现 PCI 枚举功能
-#include "slab.c"   // 假设已实现物理内存分配
+#include "slab.h"   // 假设已实现物理内存分配
 #include "io.h"   // 内存映射 I/O 函数
 
-// AHCI 寄存器定义
 #define AHCI_CAP        0x00    // HBA 能力
 #define AHCI_GHC        0x04    // 全局主机控制
 #define AHCI_IS         0x08    // 中断状态
@@ -11,7 +11,6 @@
 #define AHCI_VS         0x10    // 版本号
 #define AHCI_CAP_NP     (1 << 0)  // 支持 Native Command Queue
 
-// 端口寄存器偏移量（每个端口 0x80 字节）
 #define PORT_CLB        0x00    // Command List Base
 #define PORT_CLBU       0x04    // Command List Base Upper
 #define PORT_FB         0x08    // FIS Base
@@ -23,7 +22,6 @@
 #define PORT_SERR       0x30    // SATA 错误
 #define PORT_SIG        0x24    // 设备签名
 
-// 命令状态
 #define AHCI_CMD_START  (1 << 0)
 #define AHCI_CMD_FIS_RX (1 << 4)
 
