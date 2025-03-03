@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "pci.h"  // 假设已实现 PCI 枚举功能
-#include "slab.h"   // 假设已实现物理内存分配
-#include "io.h"   // 内存映射 I/O 函数
+#include "pci.h"
+#include "slab.h"
+#include "io.h"
 
 #define AHCI_CAP        0x00    // HBA 能力
 #define AHCI_GHC        0x04    // 全局主机控制

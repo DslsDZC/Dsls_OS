@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include "pci.h"
-#include "slab.c"
+#include "slab.h"
 #include "io.h"
 
 #define E1000_VENDOR_ID   0x8086

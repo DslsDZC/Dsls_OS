@@ -1,7 +1,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "disk.h"   // 假设有read_sector()函数
+#ifdef _WIN32
+#include <iconv.h>
+#else
+#include <iconv.h>
+#endif
+#include "disk.h"
 #include "slab.h"
 
 #pragma pack(push, 1)
