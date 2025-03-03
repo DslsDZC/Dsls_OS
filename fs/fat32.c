@@ -1,9 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
-#include <iconv.h>
-#include <endian.h>
+#include <stdbool.h>
 #include "disk.h"   // 假设有read_sector()函数
-#include "slab.h"   // 内存分配
+#include "slab.h"
 
 #pragma pack(push, 1)
 
@@ -15,10 +14,10 @@ struct fat32_boot_sector {
     uint8_t  sectors_per_cluster;
     uint16_t reserved_sectors;
     uint8_t  fat_count;
-    uint16_t root_entry_count;  // FAT32中应为0
+    uint16_t root_entry_count;
     uint16_t total_sectors_16;
     uint8_t  media_type;
-    uint16_t sectors_per_fat_16; // FAT32中应为0
+    uint16_t sectors_per_fat_16;
     uint16_t sectors_per_track;
     uint16_t head_count;
     uint32_t hidden_sectors;
