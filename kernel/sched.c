@@ -1,13 +1,8 @@
-/* 
- * sched.c - 核心调度程序
- * 实现进程切换、时间片轮转调度
- */
-
 #include <type.h>
 #include <sched.h>
+#include <stddef.h>
 #include <system.h>
 
-// 定义最大进程数
 #define NR_TASKS 64
 
 // 任务状态定义
@@ -18,25 +13,68 @@
 #define TASK_STOPPED     4
 
 // 任务数据结构
-struct task_struct {
-    long state;         // 任务状态
-    long counter;       // 时间片剩余
-    long priority;      // 初始优先级
-    struct task_struct *next; // 链表指针
-    unsigned long kernel_stack; // 内核栈指针
-    // ... 可扩展其他字段
-};
+    struct task_struct {
+        long state;         
+        long counter;       
+        long priority;      
+        struct task_struct *next;
+        unsigned long kernel_stack;
+        long exit_code;
+    };
 
 // 任务数组和当前任务指针
 struct task_struct *current = &init_task;
 struct task_struct *task[NR_TASKS] = {&init_task, };
 static struct task_struct init_task = {TASK_RUNNING, 15, 15, NULL, 0};
 
+/* 内存拷贝函数 */
+void* memcpy(void* dest, const void* src, size_t n) {
+    char* d = dest;
+    const char* s = src;
+    while (n--) *d++ = *s++;
+    return dest;
+}
+
+/* 内存设置函数 */
+void* memset(void* s, int c, size_t n) {
+    unsigned char* p = s;
+    while (n--) *p++ = (unsigned char)c;
+    return s;
+}
+
+/* 安全字符串拷贝 */
+char* strncpy(char* dest, const char* src, size_t n) {
+    char* ret = dest;
+    while (n-- && (*dest++ = *src++));
+    return ret;
+}
+
+/* 字符串连接函数 */
+char* strcat(char* dest, const char* src) {
+    char* ret = dest;
+    while (*dest) dest++;
+    while ((*dest++ = *src++));
+    return ret;
+}
+
 // 系统时钟计数器
 volatile unsigned long jiffies = 0;
 
-// 汇编实现的上下文切换
-extern void switch_to(struct task_struct *next);
+#define switch_to(n) do { \
+    __asm__ __volatile__( \
+        "pushl %%ebp\n\t"       \
+        "movl %%esp, %0\n\t"    \
+        "movl %1, %%esp\n\t"    \
+        "movl $1f, %0\n\t"      \
+        "pushl %1\n\t"          \
+        "jmp __switch_to\n"     \
+        "1:\t"                  \
+        "popl %%ebp\n\t"        \
+        : "=m" (current->kernel_stack) \
+        : "r" (n->kernel_stack), "d" (n) \
+        : "memory"               \
+    );                           \
+} while (0)
 
 /* 
  * 核心调度函数 
@@ -149,5 +187,31 @@ void thread_start(int (*fn)(void *), void *arg)
     fn(arg);
     // 线程结束后进入终止状态
     current->state = TASK_ZOMBIE;
+    schedule();
+}
+
+/* 初始化任务管理系统 */
+void sched_init(void) {
+    // 初始化空闲任务
+    init_task.state = TASK_RUNNING;
+    init_task.counter = 15;
+    init_task.priority = 15;
+    
+    // 注册空闲任务
+    task[0] = &init_task;
+    
+    // 设置当前任务指针
+    current = task[0];
+}
+
+/* 获取当前进程PID */
+pid_t getpid(void) {
+    return (pid_t)(current - task[0]);
+}
+
+/* 进程退出处理 */
+void task_exit(int exit_code) {
+    current->state = TASK_ZOMBIE;
+    current->exit_code = exit_code;
     schedule();
 }

@@ -18,10 +18,9 @@ struct pci_device {
     struct pci_device* next;
 };
 
-// PCI 子系统初始化
 void pci_init();
 
-// 查找指定设备
+
 struct pci_device* pci_find_device(uint16_t vendor_id, uint16_t device_id);
 
-#endif // PCI_H
+#endif

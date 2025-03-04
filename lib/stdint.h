@@ -67,4 +67,28 @@ typedef unsigned long uintptr_t;
 #define INT64_C(x)  (x ## LL)
 #define UINT64_C(x) (x ## ULL)
 
+
+// 添加链表节点结构体定义
+struct list_head {
+    struct list_head *prev;
+    struct list_head *next;
+};
+
+struct timer_list {
+    struct list_head entry;         // 定时器链表节点
+    unsigned long expires;          // 到期时间（jiffies为单位）
+    void (*function)(unsigned long);// 回调函数指针
+    unsigned long data;             // 传递给回调函数的数据
+    unsigned int flags;             // 状态标志位
+    struct tvec_base *base;         // 所属定时器基准
+    int slack;                      // 时间容忍度（纳秒级）
+#ifdef CONFIG_LOCKDEP
+    struct lockdep_map lockdep_map; // 锁依赖映射
+#endif
+#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON)
+    unsigned long timer_start_pid;  // 启动定时器的进程ID
+    char timer_start_comm[16];      // 启动定时器的进程名
+#endif
+};
+
 #endif

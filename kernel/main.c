@@ -17,9 +17,8 @@ EFI_STATUS EfiMain(EFI_HANDLE ImageHandle, struct EFI_SYSTEM_TABLE* SystemTable)
     uint16_t message[] = u"裸机UEFI模式";
     SystemTable->ConOut(SystemTable, message);
     
-    // 脱离UEFI服务的关键步骤
     uint64_t* exit_boot_services = (uint64_t*)0x40;
-    *exit_boot_services = 0; // 实际应调用ExitBootServices()
+    *exit_boot_services = 0;
     
     while(1);
     return 0;
