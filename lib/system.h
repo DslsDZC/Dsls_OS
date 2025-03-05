@@ -6,6 +6,11 @@
 #define RLIM_NLIMITS 16
 #define NR_CPUS 64
 #define _NSIG 64
+#define ENOSYS 38
+#define TASK_RUNNING 0
+#define X86_EFLAGS_DF (1 << 10)
+#define X86_EFLAGS_IF (1 << 9)
+#define sib 0
 #include <stdint.h>
 typedef uint64_t u64;
 
@@ -26,10 +31,10 @@ struct hrtimer;
 struct taskstats;
 
 enum task_state {
-    TASK_RUNNING = 0,
-    TASK_INTERRUPTIBLE,
+    TASK_STATE_RUNNING = 0,
+    TASK_STATE_INTERRUPTIBLE,
     TASK_UNINTERRUPTIBLE,
-    TASK_ZOMBIE,    // 僵尸状态
+    TASK_ZOMBIE,
     TASK_STOPPED
 };
 
@@ -252,6 +257,8 @@ struct task_struct {
     
     /* 性能计数器 */
     struct perf_event_context *perf_event_ctxp;
+
+    unsigned long kernel_stack;
 };
 
 typedef struct {

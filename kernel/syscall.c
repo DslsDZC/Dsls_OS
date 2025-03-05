@@ -3,6 +3,10 @@
 #include <system.h>
 #include <msr.h>
 
+#define unreachable() do { \
+    asm volatile("ud2");   \
+    __builtin_unreachable(); \
+} while (0)
 
 /* 系统调用号定义 */
 #define SYS_GETPID    0
@@ -22,6 +26,10 @@ long syscall_write(long, long, long);
 long syscall_open(long, long, long);
 long syscall_close(long, long, long);
 
+extern struct task_struct *init_task;
+struct list_head children;
+struct list_head sibling;
+
 /* 系统调用表 */
 static void *syscall_table[] = {
     [SYS_GETPID] = syscall_getpid,
@@ -31,15 +39,13 @@ static void *syscall_table[] = {
     [SYS_WRITE]  = syscall_write,
     [SYS_OPEN]   = syscall_open,
     [SYS_CLOSE]  = syscall_close,
-    // 建议添加空终止符
     [7] = NULL
 };
 
     /* 补充在系统调用实现区域 */
 long syscall_exit(long status, long unused1, long unused2)
 {
-    (void)unused1; (void)unused2;  // 显式忽略多余参数
-        // 进程退出处理逻辑（完整实现）
+(void)unused1; (void)unused2;  // 显式忽略多余参数
 struct task_struct *task = current;
 
 // 1. 设置进程状态和退出码
@@ -63,8 +69,8 @@ for (int i = 0; i < MAX_FILES; i++) {
 // 4. 子进程处理（防止僵尸进程残留）
 if (!list_empty(&task->children)) {
     struct task_struct *child;
-    list_for_each_entry(child, &task->children, sibling) {
-        child->parent = init_task;  // 重新挂载到init进程
+    list_for_each_entry(child, &task->children, struct task_struct, sibling) {
+        child->parent = init_task;
     }
 }
 
@@ -72,23 +78,21 @@ if (!list_empty(&task->children)) {
 list_del(&task->run_list);
 
 // 6. 调度前日志记录（调试用）
-printk(KERN_INFO "Process %d exited with status %ld\n", task->pid, status);
+printk("<6>Process %d exited with status %ld\n", task->pid, status);
 
-// 7. 触发调度
+// 7. 触发调度（永不返回）
 schedule();
 
-// 8. 永远不会到达这里（优化提示）
+// 编译器优化提示和防护措施
 unreachable();
-        
-        // 释放资源（需补充资源回收逻辑）
-        // kfree(task->mm);
-        
-        // 调度其他进程（需调度器支持）
-        schedule();
-        
-        return 0;
-    }
 
+// 安全防护循环（可选）
+while (1) {
+    // 关闭中断并挂起CPU
+    arch_local_irq_disable();
+    cpu_relax();
+}
+}
 /* 系统调用入口处理 */
 __attribute__((naked)) void syscall_entry(void)
 {
@@ -137,12 +141,10 @@ long syscall_getpid(long a1, long a2, long a3)
     (void)a1; (void)a2; (void)a3; // 显式忽略未用参数
     return current->pid;
 }
-// 修改函数定义（第103行）
 long syscall_fork(long a1, long a2, long a3)
 {
     (void)a1; (void)a2; (void)a3; // 显式忽略参数
     struct task_struct *child = kmalloc(sizeof(*current));
-    // ...保持原有实现逻辑不变...
     memcpy(child, current, sizeof(*current));
     
     // 复制内核栈
@@ -163,5 +165,5 @@ void syscall_init(void)
     // 设置MSR寄存器（需要arch/x86_64/msr.h）
     wrmsr(IA32_LSTAR, (uint64_t)syscall_entry);
     wrmsr(IA32_STAR,  (uint64_t)((8ULL << 32) | (16ULL << 48)));
-    wrmsr(IA32_FMASK, X86_EFLAGS_DF|X86_EFLAGS_IF);
+    wrmsr(IA32_FMASK, X86_EFLAGS_DF | X86_EFLAGS_IF);
 }
