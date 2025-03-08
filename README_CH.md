@@ -33,12 +33,12 @@ make run
 ```
 
 ## 🌐 示例输出
-
+```txt
 [  OK  ] Initialized SMP (4 CPUs)
 [  OK  ] Memory: 1024MB @ 0x100000
 [  OK  ] AHCI Controller: 2 Ports Initialized
 [  OK  ] EXT2 FS: Mounted rootfs at /dev/sda1
-
+```
 ## 🤝 贡献流程
 1.Fork项目仓库
 2.创建特性分支 (git checkout -b feat/new-feature)
