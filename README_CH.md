@@ -49,7 +49,7 @@ make run
 ## 📄 许可证
 BSD 3-Clause License © 2024 DSLS Development Team
 
-##实际文件结构建议按以下方式组织：
+## 实际文件结构建议按以下方式组织：
 ```text
 /os
 ├── Makefile            # 自动化构建
