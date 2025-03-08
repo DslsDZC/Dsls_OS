@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/Dsls_OS/ci.yml?branch=main)](https://github.com/yourusername/Dsls_OS/actions)
 
-现代操作系统研究型内核，支持x86_64架构，具有以下技术亮点：
+自研现代操作系统内核，支持x86_64架构：
 
 ## 🚀 核心架构
 ![](https://mermaid.ink/svg/eyJjb2RlIjoiZ3JhcGggVERcbiAgICBLZXJuZWwtLT5WTVgvS1ZNXG4gICAgS2VybmVsLS0-TXVsdGljb3JlW1NNUCBQb29saW5nXVxuICAgIEtlcm5lbC0tPk1lbU1ncltTTEFCIEFsbG9jYXRvcl1cbiAgICBLZXJuZWwtLT5TY2hlZFtNTEdRIFNjaGVkdWxlcl1cbiAgICBWaXJ0SU8tLT5FSDEwMDB8UENJIEV0aGVybmV0XVxuICAgIFZpcnRJT0J1cy0tPkZhdDMyL0V4dDJ8QmxvY2sgRGV2aWNlXG4gICAgIiwibWVybWFpZCI6eyJ0aGVtZSI6ImRlZmF1bHQifSwidXBkYXRlRWRpdG9yIjpmYWxzZX0)

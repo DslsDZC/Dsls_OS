@@ -1,34 +1,88 @@
 # Dsls_OS
 
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![Arch](https://img.shields.io/badge/arch-x86__64%20%7C%20ARMv8-brightgreen)](https://en.wikipedia.org/wiki/X86-64)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/Dsls_OS/ci.yml?branch=main)](https://github.com/yourusername/Dsls_OS/actions)
 
-Modern OS kernel research project led by Chinese developers, featuring:
+A self-developed modern OS kernel supporting x86_64 architecture:
 
-## ✨ Core Features
-- **Hybrid Architecture**: Native x86_64 support with ARMv8 compatibility
-- **Advanced Virtualization**: Intel VMX-based hardware virtualization
-- **Dual FS Support**: Integrated Ext2/FAT32 drivers with block device abstraction
-- **Smart Scheduling**: MLFQ algorithm with SMP load balancing
-- **Security Design**: User/Kernel isolation with NX bit & ASLR
-- **Dev-Friendly**: POSIX-compatible syscalls + GDB stub
+## 🚀 Core Architecture
+![](https://mermaid.ink/svg/eyJjb2RlIjoiZ3JhcGggVERcbiAgICBLZXJuZWwtLT5WTVgvS1ZNXG4gICAgS2VybmVsLS0-TXVsdGljb3JlW1NNUCBQb29saW5nXVxuICAgIEtlcm5lbC0tPk1lbU1ncltTTEFCIEFsbG9jYXRvcl1cbiAgICBLZXJuZWwtLT5TY2hlZFtNTEdRIFNjaGVkdWxlcl1cbiAgICBWaXJ0SU8tLT5FSDEwMDB8UENJIEV0aGVybmV0XVxuICAgIFZpcnRJT0J1cy0tPkZhdDMyL0V4dDJ8QmxvY2sgRGV2aWNlXG4gICAgIiwibWVybWFpZCI6eyJ0aGVtZSI6ImRlZmF1bHQifSwidXBkYXRlRWRpdG9yIjpmYWxzZX0)
 
-## 🛠️ Tech Stack
-- **Languages**: C11/C++17 (core) + Rust (driver framework)
-- **Toolchain**: LLVM 15 + UEFI Toolchain
-- **Build System**: CMake + Ninja
-- **Testing**: GoogleTest + QEMU testbed
+## 🛠️ Technical Features
+| Module         | Implementation Details                                                |
+|----------------|-----------------------------------------------------------------------|
+| Memory Mgmt     | SLAB allocator + Page Table Isolation (see `mm/slab.c`)               |
+| Process Sched   | Multilevel Feedback Queue (kernel/sched.c)                            |
+| Virtualization  | Intel VMX support (arch/x86_64/vmx.c)                               |
+| Storage System  | AHCI driver + Ext2/FAT32 dual FS (drivers/ahci.c, fs/ext2.c)          |
+| Network Stack   | e1000 driver + TCP/IP stack (drivers/e1000.c)                         |
 
-## 📚 Documentation
+## 📦 Build Guide
+```bash
+# Install toolchain
+sudo apt install clang-15 lld qemu-system-x86
+
+# Build kernel
+make ARCH=x86_64
+
+# Create boot image
+make image
+
+# Start QEMU
+make run
+```
+## 🌐 Sample Output
+```txt
+[  OK  ] Initialized SMP (4 CPUs)
+[  OK  ] Memory: 1024MB @ 0x100000
+[  OK  ] AHCI Controller: 2 Ports Initialized
+[  OK  ] EXT2 FS: Mounted rootfs at /dev/sda1
+```
+## 🤝 Contribution
+1.Fork the repository
+2.Create feature branch (git checkout -b feat/new-feature)
+3.Commit changes (git commit -m 'Add amazing feature')
+4.Push to branch (git push origin feat/new-feature)
+5.Open Pull Request
+
+## 📝 License
+BSD 3-Clause License © 2024 DSLS Development Team
+
+## Recommended File Structure
 ```text
-docs/
-├── ARCH.md          # Architecture Design
-├── PORTING_GUIDE.md # Platform Porting Guide
-├── DRIVER_DEV.md    # Driver Development
-└── SECURITY.md      # Security Spec
-## 🚀 Quick Start
-Prerequisites
-GCC 12+ or Clang 15+
-QEMU 7.2+ with virtualization
-UEFI dev environment (EDK II recommended)
-Build Steps
+/os
+├── Makefile            # Build automation
+├── arch
+│   └── x86_64
+│       ├── boot.asm    # Bootloader
+│       ├── smp.c       # Multi-core support
+│       └── vmx.c       # Virtualization
+├── drivers
+│   ├── pci.c          # PCI driver
+│   ├── ahci.c         # SATA driver
+│   └── e1000.c        # NIC driver
+├── fs
+│   ├── vfs.c          # Virtual File System
+│   ├── ext2.c         # EXT2 implementation
+│   └── fat32.c        # FAT32 implementation
+├── kernel
+│   ├── main.c         # Kernel entry
+│   ├── task.c         # Process management
+│   ├── sched.c        # Scheduler
+│   └── syscall.c      # System calls
+├── lib
+│   ├── string.c       # String utilities
+│   ├── elf.c          # ELF loader
+│   └── list.c         # Linked list
+├── mm
+│   ├── page.c         # Page tables
+│   ├── slab.c         # Memory allocation
+│   └── vma.c          # Virtual Memory Areas
+├── net
+│   ├── ip.c           # IP protocol
+│   ├── tcp.c          # TCP protocol
+│   └── socket.c       # Socket API
+└── user
+    ├── init.c         # User init
+    └── shell.c        # Shell implementation
+```
