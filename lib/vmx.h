@@ -71,4 +71,8 @@
 #define VMX_ERROR_SUCCESS          0
 #define VMX_ERROR_FAILED_VMXON     1
 #define VMX_ERROR_FAILED_VMPTRLD   2
+
+static uint8_t* vmxon_region;
+static uint8_t* vmcs_region;
+
 #endif
