@@ -26,7 +26,7 @@ struct task_struct *task[NR_TASKS] = {&init_task, };
 static struct task_struct init_task = {TASK_RUNNING, 15, 15, NULL, 0};
 
 #define switch_to(n) do { \
-    __asm__ __volatile__( \
+    __asm__ __volatile__( 
         "pushl %%ebp\n\t"       \
         "pushl %%ebx\n\t"       \
         "pushl %%esi\n\t"       \

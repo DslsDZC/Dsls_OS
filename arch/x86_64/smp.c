@@ -1,11 +1,10 @@
 #include <stdint.h>
 #include <stddef.h>
-#include "apic.h"
-#include "task.h"
-#include "slab.h"
+#include <apic.h>
+#include <task.h>
+#include <slab.h>
+#include <smp.h>
 
-#define MAX_CPUS 16
-#define AP_BOOT_ADDR 0x8  // 0x8000物理地址对应的4KB页号（0x8000 >> 12）
 
 struct cpu_state {
     uint32_t apic_id;          // APIC ID
