@@ -3,72 +3,43 @@
 #include <stddef.h>
 #include <system.h>
 
-#define NR_TASKS 64
+enum task_state {
+    TASK_RUNNING,
+    TASK_INTERRUPTIBLE,
+    TASK_UNINTERRUPTIBLE,
+    TASK_ZOMBIE,
+    TASK_STOPPED
+};
 
-// 任务状态定义
-#define TASK_RUNNING     0
-#define TASK_INTERRUPTIBLE 1
-#define TASK_UNINTERRUPTIBLE 2
-#define TASK_ZOMBIE      3
-#define TASK_STOPPED     4
+struct task_struct {
+    long state;
+    long counter;
+    long priority;
+    struct task_struct *next;
+    unsigned long kernel_stack;
+    long exit_code;
+};
 
-// 任务数据结构
-    struct task_struct {
-        long state;         
-        long counter;       
-        long priority;      
-        struct task_struct *next;
-        unsigned long kernel_stack;
-        long exit_code;
-    };
-
-// 任务数组和当前任务指针
+volatile int int_enabled;
 struct task_struct *current = &init_task;
 struct task_struct *task[NR_TASKS] = {&init_task, };
 static struct task_struct init_task = {TASK_RUNNING, 15, 15, NULL, 0};
 
-/* 内存拷贝函数 */
-void* memcpy(void* dest, const void* src, size_t n) {
-    char* d = dest;
-    const char* s = src;
-    while (n--) *d++ = *s++;
-    return dest;
-}
-
-/* 内存设置函数 */
-void* memset(void* s, int c, size_t n) {
-    unsigned char* p = s;
-    while (n--) *p++ = (unsigned char)c;
-    return s;
-}
-
-/* 安全字符串拷贝 */
-char* strncpy(char* dest, const char* src, size_t n) {
-    char* ret = dest;
-    while (n-- && (*dest++ = *src++));
-    return ret;
-}
-
-/* 字符串连接函数 */
-char* strcat(char* dest, const char* src) {
-    char* ret = dest;
-    while (*dest) dest++;
-    while ((*dest++ = *src++));
-    return ret;
-}
-
-// 系统时钟计数器
-volatile unsigned long jiffies = 0;
-
 #define switch_to(n) do { \
     __asm__ __volatile__( \
         "pushl %%ebp\n\t"       \
+        "pushl %%ebx\n\t"       \
+        "pushl %%esi\n\t"       \
+        "pushl %%edi\n\t"       \
         "movl %%esp, %0\n\t"    \
         "movl %1, %%esp\n\t"    \
         "movl $1f, %0\n\t"      \
         "pushl %1\n\t"          \
         "jmp __switch_to\n"     \
         "1:\t"                  \
+        "popl %%edi\n\t"        \
+        "popl %%esi\n\t"        \
+        "popl %%ebx\n\t"        \
         "popl %%ebp\n\t"        \
         : "=m" (current->kernel_stack) \
         : "r" (n->kernel_stack), "d" (n) \
@@ -76,20 +47,16 @@ volatile unsigned long jiffies = 0;
     );                           \
 } while (0)
 
-/* 
- * 核心调度函数 
- * 选择counter值最大的就绪任务
- */
 void schedule(void)
 {
     struct task_struct *next, *p;
-    int c;
-
+    int c, saved_int = int_enabled;
+    
+    __asm__ __volatile__("cli");
     while (1) {
         c = -1;
         next = NULL;
         
-        // 遍历任务数组
         for (p = &init_task; p; p = p->next) {
             if (p->state == TASK_RUNNING && p->counter > c) {
                 c = p->counter;
@@ -97,119 +64,83 @@ void schedule(void)
             }
         }
         
-        // 找到可运行任务或重置时间片
         if (c) break;
         
-        // 重置所有任务的时间片
         for (p = &init_task; p; p = p->next) {
             p->counter = (p->counter >> 1) + p->priority;
         }
     }
     
-    // 执行任务切换
     switch_to(next);
+    if (saved_int) __asm__ __volatile__("sti");
 }
 
-/*
- * 系统时钟中断处理
- * 每个时钟节拍递减当前任务的时间片
- */
 void do_timer(void)
 {
-    if (--current->counter > 0) return;
+    int saved_int = int_enabled;
+    __asm__ __volatile__("cli");
+    
+    if (--current->counter > 0) {
+        if (saved_int) __asm__ __volatile__("sti");
+        return;
+    }
+    
     current->counter = 0;
     schedule();
+    if (saved_int) __asm__ __volatile__("sti");
 }
 
-/*
- * 完整的上下文切换汇编实现
- */
-#define switch_to(n) do { \
-    __asm__ __volatile__( \
-        "pushl %%ebp\n\t"       /* 保存当前EBP */ \
-        "movl %%esp, %0\n\t"    /* 保存当前ESP到当前任务 */ \
-        "movl %1, %%esp\n\t"    /* 加载新任务的ESP */ \
-        "movl $1f, %0\n\t"      /* 保存返回地址 */ \
-        "pushl %1\n\t"          /* 压入新任务的EIP */ \
-        "jmp __switch_to\n"     /* 跳转到切换函数 */ \
-        "1:\t" \
-        "popl %%ebp\n\t"        /* 恢复EBP */ \
-        : "=m" (current->kernel_stack) \
-        : "r" (n->kernel_stack), "d" (n) \
-        : "memory" \
-    ); \
-} while (0)
-
-/* 
- * 进程切换核心函数（由汇编调用）
- * prev在EDX寄存器，next在ECX寄存器
- */
 void __switch_to(struct task_struct *prev, struct task_struct *next)
 {
-    // 更新当前任务指针
     current = next;
-    // 这里可以添加TLB刷新等架构相关操作
 }
 
-/* 
- * 创建新任务（示例实现）
- */
 int kernel_thread(int (*fn)(void *), void *arg)
 {
     struct task_struct *p;
+    int i;
     
-    // 分配任务结构体（简化实现）
-    for (p = task[0]; p < &task[NR_TASKS]; p++) {
-        if (!p->state) break;
+    for (i = 0; i < NR_TASKS; i++) {
+        if (task[i] && task[i]->state == 0) {
+            p = task[i];
+            break;
+        }
     }
+    if (i >= NR_TASKS) return -1;
     
-    // 初始化任务字段
-    p->state = TASK_RUNNING;
-    p->counter = p->priority = 15;
-    p->kernel_stack = (unsigned long)kmalloc(4096) + 4096;
+    unsigned long stack = (unsigned long)kmalloc(4096);
+    if (!stack) return -1;
+    p->kernel_stack = stack + 4096;
     
-    // 设置初始执行上下文
-    unsigned long *stack = (unsigned long *)p->kernel_stack;
-    *(--stack) = (unsigned long)arg;
-    *(--stack) = (unsigned long)fn;
-    *(--stack) = 0x0202;    // EFLAGS
-    *(--stack) = 0x10;      // CS
-    *(--stack) = (unsigned long)thread_start; // EIP
+    unsigned long *stk = (unsigned long *)p->kernel_stack;
+    *(--stk) = (unsigned long)arg;
+    *(--stk) = (unsigned long)fn;
+    *(--stk) = 0x0202;
+    *(--stk) = 0x10;
+    *(--stk) = (unsigned long)thread_start;
     
-    return 0; // 返回PID（简化）
+    return 0;
 }
 
-/* 
- * 线程启动包装函数
- */
 void thread_start(int (*fn)(void *), void *arg)
 {
     fn(arg);
-    // 线程结束后进入终止状态
     current->state = TASK_ZOMBIE;
     schedule();
 }
 
-/* 初始化任务管理系统 */
 void sched_init(void) {
-    // 初始化空闲任务
     init_task.state = TASK_RUNNING;
     init_task.counter = 15;
     init_task.priority = 15;
-    
-    // 注册空闲任务
     task[0] = &init_task;
-    
-    // 设置当前任务指针
     current = task[0];
 }
 
-/* 获取当前进程PID */
 pid_t getpid(void) {
     return (pid_t)(current - task[0]);
 }
 
-/* 进程退出处理 */
 void task_exit(int exit_code) {
     current->state = TASK_ZOMBIE;
     current->exit_code = exit_code;

@@ -3,6 +3,7 @@
 #define _SCHED_H
 
 #include <type.h>
+#define NR_TASKS 64
 
 /* 任务状态定义 */
 #define TASK_RUNNING      0
