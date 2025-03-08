@@ -30,6 +30,7 @@ make image
 
 # 启动QEMU
 make run
+```
 
 ## 🌐 示例输出
 
