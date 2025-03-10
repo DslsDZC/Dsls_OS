@@ -46,7 +46,7 @@ make run
 5.Open Pull Request
 
 ## 📝 License
-BSD 3-Clause License © 2024 DSLS Development Team
+Apache 2.0 © 2025 Dsls Development Team
 
 ## Recommended File Structure
 ```text

@@ -47,7 +47,7 @@ make run
 5.创建Pull Request
 
 ## 📄 许可证
-BSD 3-Clause License © 2024 DSLS Development Team
+Apache 2.0 © 2025 Dsls Development Team
 
 ## 实际文件结构建议按以下方式组织：
 ```text
