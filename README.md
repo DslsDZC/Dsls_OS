@@ -1,6 +1,5 @@
 # Dsls_OS
 
-[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/yourusername/Dsls_OS/ci.yml?branch=main)](https://github.com/yourusername/Dsls_OS/actions)
 
 A self-developed modern OS kernel supporting x86_64 architecture:
