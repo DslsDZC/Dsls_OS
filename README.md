@@ -1,4 +1,4 @@
-[English](#en) | [Spanish](#es) | [French](#fr) | [German](#de) | [Chinese](#zh)
+[English](#en) | [Español](#es) | [Français](#fr) | [Deutsch](#de) | [中文](#zh)
 
 # Dsls_OS
 
@@ -33,7 +33,10 @@ Here is the build guide:
 Here is the sample output:
 
 ```text
-[ OK ] Initialized SMP (4 CPUs) [ OK ] Memory: 1024MB @ 0x100000 [ OK ] AHCI Controller: 2 Ports Initialized [ OK ] EXT2 FS: Mounted rootfs at /dev/sda1
+[ OK ] Initialized SMP (4 CPUs) 
+[ OK ] Memory: 1024MB @ 0x100000 
+[ OK ] AHCI Controller: 2 Ports Initialized 
+[ OK ] EXT2 FS: Mounted rootfs at /dev/sda1
 ```
 
 ## 🤝 Contribution
