@@ -25,7 +25,10 @@ A self-developed modern OS kernel supporting x86_64 architecture.
 Here is the build guide:
 
 ```bash
-# Install toolchain sudo apt install clang-15 lld qemu-system-x86 # Build kernel make ARCH=x86_64 # Create boot image make image # Start QEMU make run
+# Install toolchain sudo apt install clang-15 lld qemu-system-x86 
+# Build kernel make ARCH=x86_64 
+# Create boot image make image 
+# Start QEMU make run
 ```
 
 ## 🌐 Sample Output
