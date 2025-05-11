@@ -143,9 +143,9 @@ cl_base = alloc_phys_pages(1);
 
 ### [CATEGORY "Code Defect Fix List (Full Version)"]
 
-===============================================
-=              Driver Module Fixes             =
-===============================================
+
+###Driver Module Fixes             =
+
 
 1. AHCI driver memory leak
 - File: drivers/ahci.c Lines 18-19
@@ -162,9 +162,9 @@ cl_base = alloc_phys_pages(1);
 - Symptom: "=while" syntax error causes register state detection to fail
 - Fix: Remove redundant equals sign, add DMA buffer ring index wrap-around handling
 
-===============================================
-=              Kernel Core Fixes              =
-===============================================
+
+###Kernel Core Fixes
+
 
 4. Scheduler race condition
 - File: kernel/sched.c Line 50
@@ -181,9 +181,9 @@ cl_base = alloc_phys_pages(1);
 - Symptom: Protected mode segment selector settings are incomplete
 - Fix: Supplement fs/gs/ss segment register initialization, correct GDT descriptor limit length
 
-===============================================
-=            Memory Management Fixes          =
-===============================================
+
+###Memory Management Fixes
+
 
 7. SLAB cache false sharing
 - File: mm/slab.c Line 15
@@ -195,9 +195,9 @@ cl_base = alloc_phys_pages(1);
 - Symptom: Physical memory release address larger than 1 page is not aligned
 - Fix: Perform PAGE_SIZE alignment mask operation when calculating the physical address base
 
-===============================================
-=              File System Fixes              =
-===============================================
+
+###File System Fixes
+
 
 9. FAT32 long filename truncation
 - File: fs/fat32.c Lines 127-135
@@ -209,9 +209,9 @@ cl_base = alloc_phys_pages(1);
 - Symptom: Deleted files still appear in the directory list
 - Fix: Add filtering for entries with inode number 0 or unknown file type
 
-===============================================
-=            Toolchain Configuration Fixes      =
-===============================================
+
+###Toolchain Configuration Fixes
+
 
 11. Cross-compilation path error
 - File: Makefile Line 5
@@ -223,9 +223,7 @@ cl_base = alloc_phys_pages(1);
 - Symptom: TLB is not flushed, causing virtual address mapping to become invalid
 - Fix: Insert "invlpg" instruction sequence after APIC initialization
 
-===============================================
-=        Hardware Abstraction Layer Fixes     =
-===============================================
+###Hardware Abstraction Layer Fixes
 
 13. Missing UEFI memory descriptor
 - File: kernel/main.c Line 34
