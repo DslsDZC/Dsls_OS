@@ -53,7 +53,41 @@ Apache 2.0 © 2025 Dsls Development Team
 Here is the recommended file structure:
 
 ```text
-/os ├── Makefile # Build automation ├── arch │ └── x86_64 │ ├── boot.asm # Bootloader │ ├── smp.c # Multi-core support │ └── vmx.c # Virtualization ├── drivers │ ├── pci.c # PCI driver │ ├── ahci.c # SATA driver │ └── e1000.c # NIC driver ├── fs │ ├── vfs.c # Virtual File System │ ├── ext2.c # EXT2 implementation │ └── fat32.c # FAT32 implementation ├── kernel │ ├── main.c # Kernel entry │ ├── task.c # Process management │ ├── sched.c # Scheduler │ └── syscall.c # System calls ├── lib │ ├── string.c # String utilities │ ├── elf.c # ELF loader │ └── list.c # Linked list ├── mm │ ├── page.c # Page tables │ ├── slab.c # Memory allocation │ └── vma.c # Virtual Memory Areas ├── net │ ├── ip.c # IP protocol │ ├── tcp.c # TCP protocol │ └── socket.c # Socket API └── user ├── init.c # User init └── shell.c # Shell implementation
+/os 
+├── Makefile # Build automation 
+├── arch 
+│ └── x86_64 
+│ ├── boot.asm # Bootloader 
+│ ├── smp.c # Multi-core support 
+│ └── vmx.c # Virtualization 
+├── drivers 
+│ ├── pci.c # PCI driver 
+│ ├── ahci.c # SATA driver 
+│ └── e1000.c # NIC driver 
+├── fs 
+│ ├── vfs.c # Virtual File System 
+│ ├── ext2.c # EXT2 implementation 
+│ └── fat32.c # FAT32 implementation 
+├── kernel 
+│ ├── main.c # Kernel entry 
+│ ├── task.c # Process management 
+│ ├── sched.c # Scheduler 
+│ └── syscall.c # System calls 
+├── lib 
+│ ├── string.c # String utilities 
+│ ├── elf.c # ELF loader 
+│ └── list.c # Linked list 
+├── mm 
+│ ├── page.c # Page tables 
+│ ├── slab.c # Memory allocation 
+│ └── vma.c # Virtual Memory Areas 
+├── net 
+│ ├── ip.c # IP protocol 
+│ ├── tcp.c # TCP protocol 
+│ └── socket.c # Socket API 
+└── user 
+   ├── init.c # User init 
+   └── shell.c # Shell implementation
 ```
 
 ---
@@ -141,11 +175,7 @@ cl_base = alloc_phys_pages(1);
 **STATUS:** UNRESOLVED
 **PRIORITY_ORDER:** `BUG-006 > BUG-007 > BUG-004 > BUG-005`
 
-### [CATEGORY "Code Defect Fix List (Full Version)"]
-
-
-###Driver Module Fixes             =
-
+##Code Defect Fix List (Full Version
 
 1. AHCI driver memory leak
 - File: drivers/ahci.c Lines 18-19
@@ -162,10 +192,6 @@ cl_base = alloc_phys_pages(1);
 - Symptom: "=while" syntax error causes register state detection to fail
 - Fix: Remove redundant equals sign, add DMA buffer ring index wrap-around handling
 
-
-###Kernel Core Fixes
-
-
 4. Scheduler race condition
 - File: kernel/sched.c Line 50
 - Symptom: Task counter update lacks lock protection in multi-core environment
@@ -181,10 +207,6 @@ cl_base = alloc_phys_pages(1);
 - Symptom: Protected mode segment selector settings are incomplete
 - Fix: Supplement fs/gs/ss segment register initialization, correct GDT descriptor limit length
 
-
-###Memory Management Fixes
-
-
 7. SLAB cache false sharing
 - File: mm/slab.c Line 15
 - Symptom: Multi-core CPUs accessing the same cache line leads to performance degradation
@@ -194,10 +216,6 @@ cl_base = alloc_phys_pages(1);
 - File: mm/page.c Line 93
 - Symptom: Physical memory release address larger than 1 page is not aligned
 - Fix: Perform PAGE_SIZE alignment mask operation when calculating the physical address base
-
-
-###File System Fixes
-
 
 9. FAT32 long filename truncation
 - File: fs/fat32.c Lines 127-135
@@ -209,10 +227,6 @@ cl_base = alloc_phys_pages(1);
 - Symptom: Deleted files still appear in the directory list
 - Fix: Add filtering for entries with inode number 0 or unknown file type
 
-
-###Toolchain Configuration Fixes
-
-
 11. Cross-compilation path error
 - File: Makefile Line 5
 - Symptom: Kernel header directory is not correctly pointed to
@@ -222,8 +236,6 @@ cl_base = alloc_phys_pages(1);
 - File: arch/x86_64/smp.c Line 42
 - Symptom: TLB is not flushed, causing virtual address mapping to become invalid
 - Fix: Insert "invlpg" instruction sequence after APIC initialization
-
-###Hardware Abstraction Layer Fixes
 
 13. Missing UEFI memory descriptor
 - File: kernel/main.c Line 34
