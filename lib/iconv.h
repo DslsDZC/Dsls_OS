@@ -17,10 +17,8 @@ size_t iconv(iconv_t cd, char** inbuf, size_t *inbytesleft,
 int iconv_close(iconv_t cd);
 
 #ifdef _WIN32
-// Windows环境下的简化实现（示例）
-#define ICONV_CONST const
 #else
-#define ICONV_CONST
+#define ICONV_CONS T
 #endif
 
 // 常用编码类型定义

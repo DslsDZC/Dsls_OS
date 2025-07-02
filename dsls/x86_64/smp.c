@@ -1,44 +1,36 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <apic.h>
-#include <task.h>
-#include <slab.h>
 #include <smp.h>
-#define spin_unlock(lock) \
-    __sync_lock_release(lock); \
-    __asm__ __volatile__("" ::: "memory")
+#include <intrin.h>
 
-struct cpu_state {
-    uint32_t apic_id;
-    struct task* current_task;
-    struct task* runqueue;
-    uint8_t lock;
-} __attribute__((aligned(64)));
+#pragma pack(push, 1)
+struct cpu_state cpus[MAX_CPUS];
+#pragma pack(pop)
+__declspec(align(64)) struct cpu_state;
 
-static struct cpu_state cpus[MAX_CPUS];
-static uint32_t num_cpus;
+uint32_t num_cpus;
 
-static inline void spin_lock(uint8_t* lock) {
-    while (__sync_lock_test_and_set(lock, 1)) 
-        __asm__ volatile("pause");
+static inline void spin_lock(volatile uint8_t* lock) {
+    while (_InterlockedExchange8((volatile char*)lock, 1) != 0) {
+        _mm_pause();
+    }
 }
 
-static inline void spin_unlock(uint8_t* lock) {
-    __sync_lock_release(lock);
+static inline void spin_unlock(volatile uint8_t* lock) {
+    _ReadWriteBarrier();
+    *lock = 0;
 }
 
 static uint32_t get_apic_id() {
-    uint32_t eax, ebx;
-    __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx) : "a"(1));
-    return (ebx >> 24) & 0xFF;
+    int cpu_info[4];
+    __cpuid(cpu_info, 1);
+    return (cpu_info[1] >> 24) & 0xFF;
 }
 
 static void init_cpu(uint32_t cpu_id) {
     struct cpu_state* cpu = &cpus[cpu_id];
-    *cpu = (struct cpu_state){
-        .apic_id = get_apic_id(),
-        .lock = 0
-    };
+    cpu->apic_id = get_apic_id();
+    cpu->lock = 0;
+    cpu->current_task = NULL;
+    cpu->runqueue = NULL;
 }
 
 static void start_ap(uint32_t cpu_id) {
@@ -48,13 +40,13 @@ static void start_ap(uint32_t cpu_id) {
 }
 
 void ap_entry() {
-    uint32_t cpu_id = get_apic_id() & 0xFF;
+    uint32_t cpu_id;
+    cpu_id = get_apic_id() & 0xFF;
     init_cpu(cpu_id);
     cpus[cpu_id].current_task = idle_task();
-    
+
     for (;;) {
-        schedule();
-        __asm__ volatile("hlt");
+         __asm__ __volatile__("hlt");
     }
 }
 
@@ -68,7 +60,7 @@ void smp_init() {
             ++num_cpus;
         }
     }
-    printf("SMP: %d CPUs initialized\n", num_cpus);
+    debug_printf("SMP: %d CPUs initialized\n", num_cpus);
 }
 
 void smp_schedule() {
@@ -79,7 +71,7 @@ void smp_schedule() {
     if (cpu->runqueue) {
         struct task* next = cpu->runqueue;
         cpu->runqueue = next->next;
-        
+
         if (cpu->current_task) {
             cpu->current_task->next = cpu->runqueue;
             cpu->runqueue = cpu->current_task;
@@ -92,7 +84,7 @@ void smp_schedule() {
 
 void smp_add_task(struct task* task, uint32_t cpu_id) {
     if (cpu_id >= num_cpus) return;
-    
+
     struct cpu_state* cpu = &cpus[cpu_id];
     spin_lock(&cpu->lock);
     task->next = cpu->runqueue;

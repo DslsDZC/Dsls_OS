@@ -63,40 +63,47 @@ Apache 2.0 © 2025 Dsls 开发团队
 
 ```
 /os
-├── Makefile        # 构建自动化
-├── arch
+├── Makefile            # 自动化构建
+├── boot
+│   ├── bios
+│   │   └── boot.asm    # 传统 BIOS 引导程序
+│   └── uefi
+│       ├── boot.c      # UEFI 主引导程序
+│       ├── graphics.c  # UEFI 图形处理
+│       ├── loader.c    # UEFI 内核加载
+│       └── uefi.h      # UEFI 公共头文件
+├── dsls
 │   └── x86_64
-│       ├── boot.asm    # 引导加载程序
 │       ├── smp.c       # 多核支持
 │       └── vmx.c       # 虚拟化
 ├── drivers
-│   ├── pci.c       # PCI 驱动
-│   ├── ahci.c      # SATA 驱动
-│   └── e1000.c     # 网卡驱动
+│   ├── pci.c          # PCI驱动
+│   ├── ahci.c         # SATA驱动
+│   └── e1000.c        # 网卡驱动
 ├── fs
-│   ├── vfs.c       # 虚拟文件系统
-│   ├── ext2.c      # EXT2 实现
-│   └── fat32.c     # FAT32 实现
+│   ├── vfs.c          # 虚拟文件系统
+│   ├── ext2.c         # EXT2实现
+│   └── fat32.c        # FAT32实现
 ├── kernel
-│   ├── main.c      # 内核入口
-│   ├── task.c      # 进程管理
-│   ├── sched.c     # 调度器
-│   └── syscall.c   # 系统调用
+│   ├── main.c         # 内核入口
+│   ├── task.c         # 进程管理
+│   ├── sched.c        # 调度器
+│   └── syscall.c      # 系统调用
 ├── lib
-│   ├── string.c    # 字符串工具
-│   ├── elf.c       # ELF 加载器
-│   └── list.c      # 链表
+│   ├── string.c       # 字符串处理
+│   ├── elf.c          # ELF加载器
+│   └── list.c         # 链表实现
 ├── mm
-│   ├── page.c      # 页表
-│   ├── slab.c      # 内存分配
-│   └── vma.c       # 虚拟内存区域
+│   ├── page.c         # 页表管理
+│   ├── slab.c         # 内存分配
+│   └── vma.c          # 虚拟内存区域
 ├── net
-│   ├── ip.c        # IP 协议
-│   ├── tcp.c       # TCP 协议
-│   └── socket.c    # Socket API
+│   ├── ip.c           # IP协议
+│   ├── tcp.c          # TCP协议
+│   └── socket.c       # 套接字接口
 └── user
-    ├── init.c      # 用户初始化
-    └── shell.c     # Shell 实现
+    ├── init.c         # 用户初始化
+    └── shell.c        # Shell实现
 ```
 
 ---

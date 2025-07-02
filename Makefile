@@ -1,91 +1,97 @@
-CC := clang
-LD := ld.lld
-ASM := nasm
-OBJCOPY := objcopy
-
-CROSS_COMPILE_INC ?= /path/to/cross-compiler/include
-BUILD_DIR := build
-ISO_DIR := iso
-EFI_DIR := $(ISO_DIR)/EFI/BOOT
-
-TARGET_ELF := os.elf
-TARGET_ISO := os.iso
-EFI_TARGET := $(EFI_DIR)/BOOTX64.EFI
-
-SRCS := \
-    arch/x86_64/boot.asm \
-    kernel/main.c \
-    mm/page.c \
-    kernel/sched.c \
-    fs/fat32.c \
-    user/shell.c
-
-DEBUG ?= 0
-OPTIMIZATION ?= -O2
-
-OBJS := $(addprefix $(BUILD_DIR)/,$(SRCS))
-OBJS := $(OBJS:.asm=.o)
-OBJS := $(OBJS:.c=.o)
-DEPS := $(OBJS:.o=.d)
-
-ASFLAGS := -f elf64
-
-CFLAGS := \
-    -target x86_64-unknown-none \
-    -nostdlib \
-    -ffreestanding \
-    -mno-red-zone \
-    -I$(CROSS_COMPILE_INC) \
-    -Wall \
-    -Wextra \
-    -Werror \
-    -Wno-unused-parameter \
-    $(OPTIMIZATION) \
-    -MMD -MP
-
-LDFLAGS := -T linker.ld -nostdlib -z max-page-size=0x1000
-
-ifeq ($(DEBUG),1)
-CFLAGS += -g -gdwarf-4
-ASFLAGS += -F dwarf
-endif
-
-.PHONY: all clean run
-
-all: $(TARGET_ISO)
-
-$(BUILD_DIR)/%.o: %.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/%.o: %.asm
-	@mkdir -p $(@D)
-	$(ASM) $(ASFLAGS) $< -o $@
-
-$(TARGET_ELF): $(OBJS)
-	$(LD) $(LDFLAGS) -o $@ $^
-	@echo "[LD] Linked ELF: $@"
-
-$(TARGET_ISO): $(TARGET_ELF)
-	@mkdir -p $(EFI_DIR)
-	$(OBJCOPY) -O binary $< $(EFI_TARGET).bin
-	@cp $< $(EFI_TARGET)
-	@xorriso -as mkisofs -quiet -o $@ $(ISO_DIR)
-
-clean:
-	@rm -rf $(BUILD_DIR) $(ISO_DIR) $(TARGET_ELF) $(TARGET_ISO)
-
--include $(DEPS)
-
+BUILD_MODE ?= uefi
 QEMU := qemu-system-x86_64
 OVMF_PATH ?= /usr/share/ovmf/OVMF.fd
+BUILD_DIR := build
+ISO_DIR := $(BUILD_DIR)/iso
+KERNEL := $(BUILD_DIR)/kernel.elf
 
-run: $(TARGET_ISO)
-	@$(QEMU) \
-		-bios $(OVMF_PATH) \
-		-cdrom $(TARGET_ISO) \
-		-net none \
-		-smp 4 \
-		-m 2G \
-		-machine q35 \
-		-serial stdio
+BIOS_ASM := nasm
+BIOS_LD := ld.lld
+BIOS_DIR := boot/bios
+
+UEFI_CC := x86_64-w64-mingw32-gcc
+UEFI_LD := x86_64-w64-mingw32-ld
+UEFI_OBJCOPY := objcopy
+UEFI_DIR := boot/uefi
+GNUEB_DIR ?= /usr/local/gnuefi
+
+.PHONY: all clean run bios uefi kernel
+
+all: $(BUILD_MODE)
+
+bios: $(BUILD_DIR)/bios.img
+
+uefi: $(BUILD_DIR)/uefi.iso
+
+kernel: $(KERNEL)
+
+BIOS_OBJS := \
+    $(BUILD_DIR)/bios/boot.o \
+    $(BUILD_DIR)/bios/loader.o
+
+$(BUILD_DIR)/bios/%.o: $(BIOS_DIR)/%.asm
+    @mkdir -p $(@D)
+    $(BIOS_ASM) -f bin $< -o $@
+
+$(BUILD_DIR)/bios.bin: $(BIOS_OBJS)
+    cat $^ > $@
+    truncate -s 512 $@
+
+$(BUILD_DIR)/bios.img: $(BUILD_DIR)/bios.bin $(KERNEL)
+    dd if=/dev/zero of=$@ bs=1M count=64
+    dd if=$< of=$@ conv=notrunc
+    dd if=$(KERNEL) of=$@ bs=1M seek=1 conv=notrunc
+
+UEFI_SRCS := \
+    $(UEFI_DIR)/boot.c \
+    $(UEFI_DIR)/graphics.c \
+    $(UEFI_DIR)/loader.c
+
+UEFI_OBJS := $(addprefix $(BUILD_DIR)/uefi/,$(notdir $(UEFI_SRCS:.c=.o)))
+EFI_TARGET := $(ISO_DIR)/EFI/BOOT/BOOTX64.EFI
+
+$(BUILD_DIR)/uefi/%.o: $(UEFI_DIR)/%.c
+    @mkdir -p $(@D)
+    $(UEFI_CC) -Wall -Wextra -e efi_main -nostdinc -nostdlib -fno-builtin -fno-stack-protector \
+        -I$(GNUEB_DIR)/inc -I$(GNUEB_DIR)/inc/x86_64 -c $< -o $@
+
+$(BUILD_DIR)/uefi/BOOTX64.EFI: $(UEFI_OBJS)
+    $(UEFI_LD) -T $(GNUEB_DIR)/lib/elf_x86_64_efi.lds -shared -Bsymbolic \
+        -L$(GNUEB_DIR)/lib $(GNUEB_DIR)/lib/crt0-efi-x86_64.o \
+        -o $@ $^ -lgnuefi -lefi
+    $(UEFI_OBJCOPY) -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel \
+        -j .rela -j .reloc --target=efi-app-x86_64 $@
+
+$(BUILD_DIR)/uefi.iso: $(BUILD_DIR)/uefi/BOOTX64.EFI $(KERNEL)
+    @mkdir -p $(ISO_DIR)/EFI/BOOT
+    @cp $< $(EFI_TARGET)
+    @cp $(KERNEL) $(ISO_DIR)
+    xorriso -as mkisofs -R -J -o $@ $(ISO_DIR)
+
+KERNEL_SRCS := kernel/kernel.c
+KERNEL_CC := clang
+KERNEL_LD := ld.lld
+
+$(BUILD_DIR)/kernel.o: $(KERNEL_SRCS)
+    @mkdir -p $(@D)
+    $(KERNEL_CC) -target x86_64-unknown-none -nostdlib -ffreestanding \
+        -mno-red-zone -c $< -o $@
+
+$(KERNEL): $(BUILD_DIR)/kernel.o
+    $(KERNEL_LD) -T linker.ld -nostdlib -z max-page-size=0x1000 -o $@ $^
+
+clean:
+    rm -rf $(BUILD_DIR)
+
+run-bios: bios
+    $(QEMU) -drive format=raw,file=$(BUILD_DIR)/bios.img -serial stdio
+
+run-uefi: uefi
+    $(QEMU) -bios $(OVMF_PATH) -cdrom $(BUILD_DIR)/uefi.iso -net none -serial stdio
+
+run:
+ifeq ($(BUILD_MODE),bios)
+    $(MAKE) run-bios
+else
+    $(MAKE) run-uefi
+endif

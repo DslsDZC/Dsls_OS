@@ -5,6 +5,7 @@
 #include <io.h>
 #include <ahci.h>
 
+
 // 初始化 AHCI 端口
 static int ahci_port_init(struct hba_port* port) {
     // 停止命令引擎
