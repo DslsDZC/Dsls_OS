@@ -14,19 +14,19 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
     );
 
     if (EFI_ERROR(status)) {
-        Print(L"Failed to locate GOP: %r\n", status);
+        if (SystemTable->ConOut) Print(L"Failed to locate GOP: %r\n", status);
         return status;
     }
 
     // 检查GOP模式是否已初始化
     if (gop->Mode == NULL) {
-        Print(L"GOP mode is not initialized\n");
+        if (SystemTable->ConOut) Print(L"GOP mode is not initialized\n");
         return EFI_DEVICE_ERROR;
     }
 
     // 检查是否有可用模式
     if (gop->Mode->MaxMode == 0) {
-        Print(L"No graphics modes available (MaxMode = 0)\n");
+        if (SystemTable->ConOut) Print(L"No graphics modes available (MaxMode = 0)\n");
         return EFI_NOT_FOUND;
     }
 
@@ -45,14 +45,14 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
         // 如果没有设置模式，则设置默认模式
         status = gop->SetMode(gop, 0);
         if (EFI_ERROR(status)) {
-            Print(L"Failed to set default mode: %r\n", status);
+            if (SystemTable->ConOut) Print(L"Failed to set default mode: %r\n", status);
             return status;
         }
 
         // 重新查询模式信息并检查状态
         status = gop->QueryMode(gop, 0, &size_of_info, &info);
         if (EFI_ERROR(status)) {
-            Print(L"Failed to query mode 0 after setting: %r\n", status);
+            if (SystemTable->ConOut) Print(L"Failed to query mode 0 after setting: %r\n", status);
             return status;
         }
 
@@ -61,7 +61,7 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
         info = NULL;
     }
     else if (EFI_ERROR(status)) {
-        Print(L"Failed to query current mode: %r\n", status);
+        if (SystemTable->ConOut) Print(L"Failed to query current mode: %r\n", status);
         return status;
     }
     else {
@@ -74,18 +74,19 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
     UINT32 desired_mode = 0;
     BOOLEAN mode_found = FALSE;
     UINT32 best_width = 0, best_height = 0;
+    UINT32 best_mode = 0;
 
-    Print(L"Available graphics modes:\n");
+    if (SystemTable->ConOut) Print(L"Available graphics modes:\n");
 
     // 遍历所有可用模式
     for (UINT32 i = 0; i < gop->Mode->MaxMode; i++) {
         status = gop->QueryMode(gop, i, &size_of_info, &info);
         if (EFI_ERROR(status)) {
-            Print(L"Failed to query mode %u: %r\n", i, status);
+            if (SystemTable->ConOut) Print(L"Failed to query mode %u: %r\n", i, status);
             continue;
         }
 
-        Print(L"Mode %u: %dx%d (pixel format: %u)\n",
+        if (SystemTable->ConOut) Print(L"Mode %u: %dx%d (pixel format: %u)\n",
             i, info->HorizontalResolution, info->VerticalResolution, info->PixelFormat);
 
         // 检查是否为1024x768模式
@@ -101,7 +102,7 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
 
         // 记录最高分辨率模式作为备选
         if (info->HorizontalResolution * info->VerticalResolution > best_width * best_height) {
-            desired_mode = i;
+            best_mode = i;
             best_width = info->HorizontalResolution;
             best_height = info->VerticalResolution;
         }
@@ -113,30 +114,38 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
 
     // 如果没有找到1024x768模式，则使用最高分辨率模式
     if (!mode_found) {
-        Print(L"1024x768 mode not found, using highest resolution mode: %dx%d\n", best_width, best_height);
-        desired_mode = desired_mode; // 已在循环中设置
-        mode_found = TRUE;
+        if (best_width > 0 && best_height > 0) {
+            if (SystemTable->ConOut) Print(L"1024x768 mode not found, using highest resolution mode: %dx%d\n", best_width, best_height);
+            desired_mode = best_mode;
+            mode_found = TRUE;
+        }
+        else {
+            // 如果所有模式查询都失败，尝试使用当前模式
+            if (SystemTable->ConOut) Print(L"All mode queries failed, trying current mode\n");
+            desired_mode = gop->Mode->Mode;
+            mode_found = TRUE;
+        }
     }
 
     // 设置选择的模式
     if (mode_found) {
         status = gop->SetMode(gop, desired_mode);
         if (EFI_ERROR(status)) {
-            Print(L"Failed to set graphics mode %u: %r\n", desired_mode, status);
+            if (SystemTable->ConOut) Print(L"Failed to set graphics mode %u: %r\n", desired_mode, status);
             return status;
         }
 
         // 验证模式是否切换成功
         if (gop->Mode->Mode != desired_mode) {
             // 如果模式不一致，使用实际模式重新查询
-            Print(L"Warning: SetMode succeeded but mode not switched, using actual mode %u\n", gop->Mode->Mode);
+            if (SystemTable->ConOut) Print(L"Warning: SetMode succeeded but mode not switched, using actual mode %u\n", gop->Mode->Mode);
             desired_mode = gop->Mode->Mode;
         }
 
         // 获取设置后的模式信息
         status = gop->QueryMode(gop, desired_mode, &size_of_info, &info);
         if (EFI_ERROR(status)) {
-            Print(L"Failed to query set mode %u: %r\n", desired_mode, status);
+            if (SystemTable->ConOut) Print(L"Failed to query set mode %u: %r\n", desired_mode, status);
             return status;
         }
 
@@ -148,15 +157,23 @@ EFI_STATUS init_graphics(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable, 
         gfx_info->framebuffer_base = gop->Mode->FrameBufferBase;
         gfx_info->framebuffer_size = gop->Mode->FrameBufferSize;
 
+        // 验证帧缓冲区有效性
+        if (gfx_info->framebuffer_base == 0 || gfx_info->framebuffer_size == 0) {
+            if (SystemTable->ConOut) Print(L"Invalid framebuffer: base=0x%llx, size=%llu\n",
+                gfx_info->framebuffer_base, gfx_info->framebuffer_size);
+            SystemTable->BootServices->FreePool(info);
+            return EFI_DEVICE_ERROR;
+        }
+
         // 释放模式信息内存
         SystemTable->BootServices->FreePool(info);
         info = NULL;
 
         // 打印成功信息
-        Print(L"Graphics mode set successfully: %dx%d\n", gfx_info->width, gfx_info->height);
+        if (SystemTable->ConOut) Print(L"Graphics mode set successfully: %dx%d\n", gfx_info->width, gfx_info->height);
     }
     else {
-        Print(L"No suitable graphics mode found\n");
+        if (SystemTable->ConOut) Print(L"No suitable graphics mode found\n");
         return EFI_NOT_FOUND;
     }
 

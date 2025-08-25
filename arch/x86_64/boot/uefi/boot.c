@@ -1,5 +1,15 @@
 #include "uefi.h"
 
+// 安全打印函数，在ConOut有效时才打印
+static void SafePrint(EFI_SYSTEM_TABLE* SystemTable, const CHAR16* format, ...) {
+    if (SystemTable->ConOut) {
+        VA_LIST args;
+        VA_START(args, format);
+        VPrint(format, args);
+        VA_END(args);
+    }
+}
+
 // UEFI应用程序入口点
 EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
     EFI_STATUS status = EFI_SUCCESS;
@@ -18,30 +28,30 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     // 检查控制台输出接口有效性
     if (SystemTable->ConOut != NULL) {
         SystemTable->ConOut->ClearScreen(SystemTable->ConOut);
-        Print(L"Starting UEFI Bootloader...\n");
+        SafePrint(SystemTable, L"Starting UEFI Bootloader...\n");
     }
 
     // 初始化图形模式
     status = init_graphics(ImageHandle, SystemTable, &gfx_info);
     if (EFI_ERROR(status)) {
-        Print(L"Failed to initialize graphics: %r\n", status);
+        SafePrint(SystemTable, L"Failed to initialize graphics: %r\n", status);
         // 清零图形信息，避免内核使用无效值
         gfx_info = (graphics_info_t){ 0 };
     }
     else {
-        Print(L"Graphics initialized: %dx%d\n", gfx_info.width, gfx_info.height);
+        SafePrint(SystemTable, L"Graphics initialized: %dx%d\n", gfx_info.width, gfx_info.height);
     }
 
     // 加载内核
     status = load_kernel(ImageHandle, SystemTable, &kernel_entry);
     if (EFI_ERROR(status)) {
-        Print(L"Failed to load kernel: %r\n", status);
+        SafePrint(SystemTable, L"Failed to load kernel: %r\n", status);
         return status;
     }
 
     // 显式检查内核入口点有效性
     if (kernel_entry == NULL) {
-        Print(L"Kernel entry point is NULL\n");
+        SafePrint(SystemTable, L"Kernel entry point is NULL\n");
         return EFI_LOAD_ERROR;
     }
 
@@ -53,7 +63,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
 
     if (EFI_ERROR(status)) {
-        Print(L"Failed to allocate boot params: %r\n", status);
+        SafePrint(SystemTable, L"Failed to allocate boot params: %r\n", status);
         return status;
     }
 
@@ -72,7 +82,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
 
     if (status != EFI_BUFFER_TOO_SMALL) {
-        Print(L"Failed to get memory map size: %r\n", status);
+        SafePrint(SystemTable, L"Failed to get memory map size: %r\n", status);
         SystemTable->BootServices->FreePool(boot_params);
         return status;
     }
@@ -86,7 +96,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
 
     if (EFI_ERROR(status)) {
-        Print(L"Failed to allocate memory for memory map: %r\n", status);
+        SafePrint(SystemTable, L"Failed to allocate memory for memory map: %r\n", status);
         SystemTable->BootServices->FreePool(boot_params);
         return status;
     }
@@ -101,7 +111,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
 
     if (EFI_ERROR(status)) {
-        Print(L"Failed to get memory map: %r\n", status);
+        SafePrint(SystemTable, L"Failed to get memory map: %r\n", status);
         SystemTable->BootServices->FreePool(memory_map);
         SystemTable->BootServices->FreePool(boot_params);
         return status;
@@ -115,7 +125,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     boot_params->memory_map.map_key = map_key;
 
     // 在退出启动服务前打印最后的消息
-    Print(L"Exiting boot services, jumping to kernel...\n");
+    SafePrint(SystemTable, L"Exiting boot services, jumping to kernel...\n");
 
     // 添加ExitBootServices重试机制
     UINTN retry_count = 3;
@@ -125,9 +135,12 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
             break;
         }
 
-        Print(L"ExitBootServices failed: %r, retrying...\n", status);
+        SafePrint(SystemTable, L"ExitBootServices failed: %r, retrying...\n", status);
 
-        // 释放旧缓冲区
+        // 短暂延迟，减少内存映射变化
+        SystemTable->BootServices->Stall(100000); // 100ms
+
+        // 释放旧内存映射缓冲区
         if (memory_map != NULL) {
             SystemTable->BootServices->FreePool(memory_map);
             memory_map = NULL;
@@ -143,11 +156,11 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
         );
 
         if (status != EFI_BUFFER_TOO_SMALL) {
-            Print(L"Failed to get memory map size during retry: %r\n", status);
+            SafePrint(SystemTable, L"Failed to get memory map size during retry: %r\n", status);
             break;
         }
 
-        // 重新分配缓冲区（保留冗余）
+        // 重新分配内存映射缓冲区（保留余量）
         alloc_size = memory_map_size + 2 * descriptor_size;
         status = SystemTable->BootServices->AllocatePool(
             EfiRuntimeServicesData,
@@ -156,11 +169,11 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
         );
 
         if (EFI_ERROR(status)) {
-            Print(L"Failed to allocate memory map during retry: %r\n", status);
+            SafePrint(SystemTable, L"Failed to allocate memory map during retry: %r\n", status);
             break;
         }
 
-        // 重新获取完整映射
+        // 重新获取完整的内存映射
         status = SystemTable->BootServices->GetMemoryMap(
             &memory_map_size,
             memory_map,
@@ -170,7 +183,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
         );
 
         if (EFI_ERROR(status)) {
-            Print(L"Failed to get memory map during retry: %r\n", status);
+            SafePrint(SystemTable, L"Failed to get memory map during retry: %r\n", status);
             break;
         }
 
@@ -183,7 +196,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     }
 
     if (EFI_ERROR(status)) {
-        Print(L"Failed to exit boot services after retries: %r\n", status);
+        SafePrint(SystemTable, L"Failed to exit boot services after retries: %r\n", status);
         SystemTable->BootServices->FreePool(memory_map);
         SystemTable->BootServices->FreePool(boot_params);
         return status;
@@ -198,7 +211,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     // 调用内核入口点，传递启动参数
     kernel_start(boot_params);
 
-    // 内核不应返回，如果返回则循环
+    // 内核不应返回，如果返回则循环停机
     while (1) {
         __asm__("hlt");
     }
