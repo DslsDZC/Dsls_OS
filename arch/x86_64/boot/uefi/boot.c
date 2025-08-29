@@ -1,3 +1,4 @@
+// boot.c
 #include "uefi.h"
 
 // 安全打印函数（确保ConOut有效时输出）
@@ -14,6 +15,11 @@ static void SafePrint(EFI_SYSTEM_TABLE* SystemTable, const CHAR16* format, ...) 
 EFI_STATUS validate_memory_map(EFI_MEMORY_DESCRIPTOR* memory_map, UINTN memory_map_size, UINTN descriptor_size) {
     UINTN num_descriptors = memory_map_size / descriptor_size;
 
+    // 检查内存映射指针有效性
+    if (memory_map == NULL) {
+        return EFI_INVALID_PARAMETER;
+    }
+
     for (UINTN i = 0; i < num_descriptors; i++) {
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)((UINT8*)memory_map + i * descriptor_size);
 
@@ -23,15 +29,34 @@ EFI_STATUS validate_memory_map(EFI_MEMORY_DESCRIPTOR* memory_map, UINTN memory_m
         }
 
         // 检查物理地址和页面数是否合理（防止溢出）
-        if (desc->NumberOfPages == 0 ||
-            desc->PhysicalStart + desc->NumberOfPages * EFI_PAGE_SIZE < desc->PhysicalStart) {
+        if (desc->NumberOfPages == 0) {
             return EFI_INVALID_PARAMETER;
         }
 
+        // 检查地址是否对齐
+        if ((desc->PhysicalStart & (EFI_PAGE_SIZE - 1)) != 0) {
+            return EFI_INVALID_PARAMETER;
+        }
+
+        // 检查内存区域是否重叠
+        for (UINTN j = i + 1; j < num_descriptors; j++) {
+            EFI_MEMORY_DESCRIPTOR* other_desc = (EFI_MEMORY_DESCRIPTOR*)((UINT8*)memory_map + j * descriptor_size);
+
+            UINT64 desc_end = desc->PhysicalStart + desc->NumberOfPages * EFI_PAGE_SIZE;
+            UINT64 other_desc_end = other_desc->PhysicalStart + other_desc->NumberOfPages * EFI_PAGE_SIZE;
+
+            // 检查是否有重叠区域
+            if (!(desc_end <= other_desc->PhysicalStart || other_desc_end <= desc->PhysicalStart)) {
+                return EFI_INVALID_PARAMETER;
+            }
+        }
+
         // 检查属性是否为合法组合
-        if (desc->Attribute & ~(EFI_MEMORY_UC | EFI_MEMORY_WC | EFI_MEMORY_WT |
+        UINT64 valid_attributes = EFI_MEMORY_UC | EFI_MEMORY_WC | EFI_MEMORY_WT |
             EFI_MEMORY_WB | EFI_MEMORY_UCE | EFI_MEMORY_WP |
-            EFI_MEMORY_RP | EFI_MEMORY_XP | EFI_MEMORY_RO)) {
+            EFI_MEMORY_RP | EFI_MEMORY_XP | EFI_MEMORY_RO;
+
+        if (desc->Attribute & ~valid_attributes) {
             return EFI_INVALID_PARAMETER;
         }
     }
@@ -41,6 +66,10 @@ EFI_STATUS validate_memory_map(EFI_MEMORY_DESCRIPTOR* memory_map, UINTN memory_m
 
 // 计算引导参数的CRC32校验和
 UINT32 calculate_boot_params_crc(boot_params_t* boot_params) {
+    if (boot_params == NULL) {
+        return 0;
+    }
+
     UINT32 crc = 0;
     UINT8* data = (UINT8*)boot_params;
     UINTN size = sizeof(boot_params_t);
@@ -49,19 +78,32 @@ UINT32 calculate_boot_params_crc(boot_params_t* boot_params) {
     UINT32 original_crc = boot_params->crc32;
     boot_params->crc32 = 0;
 
+    // 使用更健壮的CRC32算法
     for (UINTN i = 0; i < size; i++) {
-        crc = (crc << 5) - crc + data[i]; // 简化的CRC算法
+        crc ^= data[i];
+        for (UINTN j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            }
+            else {
+                crc >>= 1;
+            }
+        }
     }
 
     // 恢复原始CRC
     boot_params->crc32 = original_crc;
-    return crc;
+    return ~crc; // CRC32标准使用取反
 }
 
 // 获取ACPI表
 EFI_STATUS get_acpi_tables(EFI_SYSTEM_TABLE* SystemTable, VOID** rsdp) {
     EFI_STATUS status;
-    EFI_GUID acpi_guid = EFI_ACPI_TABLE_GUID;
+    EFI_GUID acpi_guid = EFI_ACPI_20_TABLE_GUID;
+
+    if (SystemTable == NULL || rsdp == NULL) {
+        return EFI_INVALID_PARAMETER;
+    }
 
     // 尝试获取ACPI 2.0表
     status = SystemTable->BootServices->GetConfigurationTable(&acpi_guid, rsdp);
@@ -69,6 +111,12 @@ EFI_STATUS get_acpi_tables(EFI_SYSTEM_TABLE* SystemTable, VOID** rsdp) {
         // 尝试获取ACPI 1.0表
         EFI_GUID acpi10_guid = EFI_ACPI_10_TABLE_GUID;
         status = SystemTable->BootServices->GetConfigurationTable(&acpi10_guid, rsdp);
+    }
+
+    // 尝试获取XSDT (ACPI 5.0+)
+    if (EFI_ERROR(status)) {
+        EFI_GUID xsdt_guid = EFI_ACPI_TABLE_GUID;
+        status = SystemTable->BootServices->GetConfigurationTable(&xsdt_guid, rsdp);
     }
 
     return status;
@@ -79,6 +127,26 @@ EFI_STATUS get_kernel_command_line(EFI_SYSTEM_TABLE* SystemTable, CHAR16* cmdlin
     EFI_STATUS status;
     UINTN data_size = size;
     EFI_GUID global_guid = EFI_GLOBAL_VARIABLE_GUID;
+
+    if (SystemTable == NULL || cmdline == NULL || size == 0) {
+        return EFI_INVALID_PARAMETER;
+    }
+
+    // 首先尝试获取安全启动变量（如果启用）
+    BOOLEAN secure_boot_enabled = FALSE;
+    UINT8 secure_boot;
+    UINTN secure_boot_size = sizeof(secure_boot);
+    EFI_GUID secure_boot_guid = EFI_SECURE_BOOT_MODE_GUID;
+
+    status = SystemTable->RuntimeServices->GetVariable(
+        L"SecureBoot",
+        &secure_boot_guid,
+        NULL,
+        &secure_boot_size,
+        &secure_boot
+    );
+
+    secure_boot_enabled = (!EFI_ERROR(status) && secure_boot);
 
     status = SystemTable->RuntimeServices->GetVariable(
         L"KernelCommandLine",
@@ -94,6 +162,24 @@ EFI_STATUS get_kernel_command_line(EFI_SYSTEM_TABLE* SystemTable, CHAR16* cmdlin
         return EFI_SUCCESS;
     }
 
+    // 如果安全启动启用，验证变量属性
+    if (secure_boot_enabled && !EFI_ERROR(status)) {
+        UINT32 attributes;
+        status = SystemTable->RuntimeServices->GetVariable(
+            L"KernelCommandLine",
+            &global_guid,
+            &attributes,
+            &data_size,
+            cmdline
+        );
+
+        // 检查变量是否受保护（NV+RT）
+        if (!EFI_ERROR(status) && (attributes & (EFI_VARIABLE_NON_VOLATILE | EFI_VARIABLE_RUNTIME_ACCESS)) !=
+            (EFI_VARIABLE_NON_VOLATILE | EFI_VARIABLE_RUNTIME_ACCESS)) {
+            return EFI_SECURITY_VIOLATION;
+        }
+    }
+
     return status;
 }
 
@@ -103,6 +189,10 @@ EFI_STATUS setup_kernel_stack(EFI_SYSTEM_TABLE* SystemTable, EFI_PHYSICAL_ADDRES
     EFI_PHYSICAL_ADDRESS stack_base = 0;
     UINTN stack_pages = 16; // 16页 = 64KB（假设4KB页）
 
+    if (SystemTable == NULL || stack_top == NULL) {
+        return EFI_INVALID_PARAMETER;
+    }
+
     status = SystemTable->BootServices->AllocatePages(
         AllocateAnyPages,
         EfiKernelData,
@@ -110,12 +200,38 @@ EFI_STATUS setup_kernel_stack(EFI_SYSTEM_TABLE* SystemTable, EFI_PHYSICAL_ADDRES
         &stack_base
     );
 
+    // 如果分配失败，尝试更小的栈
+    if (EFI_ERROR(status)) {
+        stack_pages = 8; // 32KB
+        status = SystemTable->BootServices->AllocatePages(
+            AllocateAnyPages,
+            EfiKernelData,
+            stack_pages,
+            &stack_base
+        );
+    }
+
+    // 如果仍然失败，尝试最小的栈
+    if (EFI_ERROR(status)) {
+        stack_pages = 4; // 16KB
+        status = SystemTable->BootServices->AllocatePages(
+            AllocateAnyPages,
+            EfiKernelData,
+            stack_pages,
+            &stack_base
+        );
+    }
+
     if (EFI_ERROR(status)) {
         return status;
     }
 
     // 栈向下增长，栈顶为分配区域的末尾
     *stack_top = stack_base + stack_pages * EFI_PAGE_SIZE;
+
+    // 填充栈内存以检测溢出
+    SetMem((VOID*)stack_base, stack_pages * EFI_PAGE_SIZE, 0xCD);
+
     return EFI_SUCCESS;
 }
 
@@ -131,6 +247,9 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     UINTN descriptor_size = 0;
     UINT32 descriptor_version = 0;
     EFI_PHYSICAL_ADDRESS kernel_stack = 0;
+    BOOLEAN graphics_initialized = FALSE;
+    BOOLEAN memory_map_allocated = FALSE;
+    BOOLEAN boot_params_allocated = FALSE;
 
     // 初始化EFI库
     InitializeLib(ImageHandle, SystemTable);
@@ -144,24 +263,27 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     // 初始化图形模式
     status = init_graphics(ImageHandle, SystemTable, &gfx_info);
     if (EFI_ERROR(status)) {
-        SafePrint(SystemTable, L"Failed to initialize graphics: %r\n", status);
+        SafePrint(SystemTable, L"Warning: Failed to initialize graphics: %r\n", status);
+        SafePrint(SystemTable, L"Falling back to text mode\n");
         gfx_info = (graphics_info_t){ 0 }; // 重置为无效状态
     }
     else {
         SafePrint(SystemTable, L"Graphics initialized: %dx%d\n", gfx_info.width, gfx_info.height);
+        graphics_initialized = TRUE;
     }
 
     // 加载内核
     status = load_kernel(ImageHandle, SystemTable, &kernel_entry);
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Failed to load kernel: %r\n", status);
-        return status;
+        goto cleanup;
     }
 
     // 验证内核入口点有效性
     if (kernel_entry == NULL) {
         SafePrint(SystemTable, L"Kernel entry point is NULL\n");
-        return EFI_LOAD_ERROR;
+        status = EFI_LOAD_ERROR;
+        goto cleanup;
     }
 
     // 分配引导参数内存
@@ -172,10 +294,12 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Failed to allocate boot params: %r\n", status);
-        return status;
+        goto cleanup;
     }
+    boot_params_allocated = TRUE;
 
     // 初始化引导参数
+    ZeroMem(boot_params, sizeof(boot_params_t));
     boot_params->graphics = gfx_info;
     boot_params->acpi_rsdp = NULL;
     boot_params->cmdline[0] = L'\0';
@@ -194,6 +318,8 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     status = get_kernel_command_line(SystemTable, boot_params->cmdline, sizeof(boot_params->cmdline));
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Warning: Failed to get kernel command line: %r\n", status);
+        // 使用空命令行而不是失败
+        boot_params->cmdline[0] = L'\0';
     }
     else {
         SafePrint(SystemTable, L"Kernel command line: %s\n", boot_params->cmdline);
@@ -209,12 +335,11 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
     if (status != EFI_BUFFER_TOO_SMALL) {
         SafePrint(SystemTable, L"Failed to get memory map size: %r\n", status);
-        SystemTable->BootServices->FreePool(boot_params);
-        return status;
+        goto cleanup;
     }
 
-    // 分配内存映射缓冲区（额外预留2个描述符空间防止动态增长）
-    UINTN alloc_size = memory_map_size + 2 * descriptor_size;
+    // 分配内存映射缓冲区（额外预留4个描述符空间防止动态增长）
+    UINTN alloc_size = memory_map_size + 4 * descriptor_size;
     status = SystemTable->BootServices->AllocatePool(
         EfiRuntimeServicesData,
         alloc_size,
@@ -222,9 +347,9 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Failed to allocate memory for memory map: %r\n", status);
-        SystemTable->BootServices->FreePool(boot_params);
-        return status;
+        goto cleanup;
     }
+    memory_map_allocated = TRUE;
 
     // 获取完整内存映射
     status = SystemTable->BootServices->GetMemoryMap(
@@ -236,18 +361,14 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     );
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Failed to get memory map: %r\n", status);
-        SystemTable->BootServices->FreePool(memory_map);
-        SystemTable->BootServices->FreePool(boot_params);
-        return status;
+        goto cleanup;
     }
 
     // 验证内存映射合法性
     status = validate_memory_map(memory_map, memory_map_size, descriptor_size);
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Invalid memory map detected: %r\n", status);
-        SystemTable->BootServices->FreePool(memory_map);
-        SystemTable->BootServices->FreePool(boot_params);
-        return status;
+        goto cleanup;
     }
 
     // 填充内存映射到引导参数
@@ -261,6 +382,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
     status = setup_kernel_stack(SystemTable, &kernel_stack);
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Warning: Failed to setup kernel stack: %r (using bootloader stack)\n", status);
+        kernel_stack = 0; // 使用引导加载程序的栈
     }
     else {
         SafePrint(SystemTable, L"Kernel stack initialized at 0x%llx\n", kernel_stack);
@@ -271,28 +393,34 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
 
     // 退出引导服务
     SafePrint(SystemTable, L"Exiting boot services, jumping to kernel...\n");
-    UINTN retry_count = 3;
+    UINTN retry_count = 5; // 增加重试次数
     while (retry_count-- > 0) {
         status = SystemTable->BootServices->ExitBootServices(ImageHandle, map_key);
         if (!EFI_ERROR(status)) break;
 
         SafePrint(SystemTable, L"ExitBootServices failed: %r, retrying...\n", status);
-        SystemTable->BootServices->Stall(100000); // 等待100ms
+        SystemTable->BootServices->Stall(200000); // 等待200ms
 
         // 释放旧内存映射并重新获取
-        if (memory_map) SystemTable->BootServices->FreePool(memory_map);
+        if (memory_map) {
+            SystemTable->BootServices->FreePool(memory_map);
+            memory_map = NULL;
+            memory_map_allocated = FALSE;
+        }
+
         status = SystemTable->BootServices->GetMemoryMap(&memory_map_size, NULL, &map_key, &descriptor_size, &descriptor_version);
         if (status != EFI_BUFFER_TOO_SMALL) {
             SafePrint(SystemTable, L"Failed to get memory map size during retry: %r\n", status);
             break;
         }
 
-        alloc_size = memory_map_size + 2 * descriptor_size;
+        alloc_size = memory_map_size + 4 * descriptor_size;
         status = SystemTable->BootServices->AllocatePool(EfiRuntimeServicesData, alloc_size, (VOID**)&memory_map);
         if (EFI_ERROR(status)) {
             SafePrint(SystemTable, L"Failed to allocate memory map during retry: %r\n", status);
             break;
         }
+        memory_map_allocated = TRUE;
 
         status = SystemTable->BootServices->GetMemoryMap(&memory_map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
         if (EFI_ERROR(status)) {
@@ -310,9 +438,7 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
 
     if (EFI_ERROR(status)) {
         SafePrint(SystemTable, L"Failed to exit boot services after retries: %r\n", status);
-        SystemTable->BootServices->FreePool(memory_map);
-        SystemTable->BootServices->FreePool(boot_params);
-        return status;
+        goto cleanup;
     }
 
     // 切换到内核栈并跳转到内核（若栈初始化成功）
@@ -337,5 +463,15 @@ EFI_STATUS EFIAPI uefi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTabl
         __asm__("hlt");
     }
 
-    return EFI_LOAD_ERROR;
-}
+cleanup:
+    // 释放所有分配的资源
+    if (memory_map_allocated && memory_map) {
+        SystemTable->BootServices->FreePool(memory_map);
+    }
+
+    if (boot_params_allocated && boot_params) {
+        SystemTable->BootServices->FreePool(boot_params);
+    }
+
+    return status;
+}v 
